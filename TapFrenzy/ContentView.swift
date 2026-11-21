@@ -1,7 +1,7 @@
-//
-///
+
 import SwiftUI
 import Combine
+import AVFoundation
 
 enum GamePhase {
     case idle
@@ -11,19 +11,30 @@ enum GamePhase {
 
 struct ContentView: View {
 
-    // Step 3: Score
+    // Game Variables
+
     @State private var score = 0
-
-    // Step 4: Countdown timer
     @State private var timeRemaining = 10
-
-    // Step 5: Game phases
     @State private var phase: GamePhase = .idle
 
-    // Step 6: Save high score
-    @AppStorage("highScore") private var highScore = 0
+    @State private var buttonScale: CGFloat = 1.0
 
-    // Timer publisher
+    // Saved Data
+
+    @AppStorage("highScore")
+    private var highScore = 0
+
+    @AppStorage("tapFrenzySoundEnabled")
+    private var soundEnabled = true
+
+    // Audio Players
+
+    @State private var tapPlayer: AVAudioPlayer?
+    @State private var startPlayer: AVAudioPlayer?
+    @State private var gameOverPlayer: AVAudioPlayer?
+
+    // Timer
+
     private let timer = Timer.publish(
         every: 1,
         on: .main,
@@ -32,107 +43,345 @@ struct ContentView: View {
 
     var body: some View {
 
-        VStack(spacing: 25) {
+        ZStack {
 
-            // Game title
-            Text("Tap Frenzy")
-                .font(.largeTitle)
-                .fontWeight(.heavy)
+            // Background
+            LinearGradient(
+                colors: [
+                    Color(red: 0.03, green: 0.08, blue: 0.12),
+                    Color(red: 0.02, green: 0.02, blue: 0.08)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
 
-            // Score
-            VStack(spacing: 5) {
-                Text("SCORE")
-                    .font(.caption)
-                    .foregroundColor(.gray)
+            VStack(spacing: 25) {
 
-                Text("\(score)")
-                    .font(.system(size: 65, weight: .heavy))
-                    .foregroundColor(.green)
-            }
+                // Header
 
-            // Timer
-            VStack(spacing: 5) {
-                Text("TIME REMAINING")
-                    .font(.caption)
-                    .foregroundColor(.gray)
+                HStack {
 
-                Text("\(timeRemaining) seconds")
-                    .font(.title2)
-                    .fontWeight(.bold)
-                    .foregroundColor(timeRemaining <= 3 ? .red : .primary)
-            }
+                    VStack(alignment: .leading, spacing: 5) {
 
-            // Game button
-            if phase != .over {
+                        Text("TAP FRENZY")
+                            .font(.largeTitle)
+                            .fontWeight(.heavy)
+                            .foregroundColor(.white)
 
-                Button(action: tapButton) {
-
-                    Text(phase == .idle ? "TAP TO START" : "TAP")
-                        .font(.title2)
-                        .fontWeight(.heavy)
-                        .foregroundColor(.black)
-                        .frame(width: 200, height: 200)
-                        .background(Color.green)
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-
-            } else {
-
-                VStack(spacing: 15) {
-
-                    Text("GAME OVER!")
-                        .font(.title)
-                        .fontWeight(.heavy)
-                        .foregroundColor(.red)
-
-                    Text("Your Score: \(score)")
-                        .font(.title2)
-
-                    Button("PLAY AGAIN") {
-                        resetGame()
+                        Text("TEST YOUR SPEED!")
+                            .font(.caption)
+                            .tracking(2)
+                            .foregroundColor(.gray)
                     }
-                    .font(.headline)
-                    .foregroundColor(.black)
-                    .padding()
-                    .background(Color.green)
-                    .cornerRadius(12)
+
+                    Spacer()
+
+                    // Sound toggle
+                    Button {
+
+                        soundEnabled.toggle()
+
+                    } label: {
+
+                        Image(
+                            systemName: soundEnabled
+                            ? "speaker.wave.2.fill"
+                            : "speaker.slash.fill"
+                        )
+                        .font(.title2)
+                        .foregroundColor(.white)
+                        .padding(12)
+                        .background(Color.white.opacity(0.1))
+                        .clipShape(Circle())
+                    }
                 }
+
+                // Score
+
+                VStack(spacing: 5) {
+
+                    Text("YOUR SCORE")
+                        .font(.caption)
+                        .tracking(2)
+                        .foregroundColor(.gray)
+
+                    Text("\(score)")
+                        .font(.system(size: 65, weight: .heavy))
+                        .foregroundColor(.green)
+                        .contentTransition(.numericText())
+                }
+
+                // Timer
+
+                VStack(spacing: 10) {
+
+                    HStack {
+
+                        Text("TIME LEFT")
+                            .font(.caption)
+                            .foregroundColor(.gray)
+
+                        Spacer()
+
+                        Text("\(timeRemaining) SEC")
+                            .font(.headline)
+                            .foregroundColor(
+                                timeRemaining <= 3
+                                ? .red
+                                : .white
+                            )
+                    }
+
+                    ProgressView(
+                        value: Double(timeRemaining),
+                        total: 10
+                    )
+                    .tint(timeRemaining <= 3 ? .red : .green)
+                    .scaleEffect(y: 2)
+                }
+
+                // Game Button
+
+                Spacer()
+
+                if phase != .over {
+
+                    Button {
+
+                        tapButton()
+
+                    } label: {
+
+                        ZStack {
+
+                            Circle()
+                                .fill(Color.green.opacity(0.15))
+                                .frame(width: 235, height: 235)
+
+                            Circle()
+                                .fill(Color.green.opacity(0.3))
+                                .frame(width: 210, height: 210)
+
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.green,
+                                            Color(red: 0.0, green: 0.65, blue: 0.3)
+                                        ],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 180, height: 180)
+
+                            VStack(spacing: 8) {
+
+                                Image(systemName: "hand.tap.fill")
+                                    .font(.system(size: 40))
+
+                                Text(
+                                    phase == .idle
+                                    ? "START"
+                                    : "TAP!"
+                                )
+                                .font(.title)
+                                .fontWeight(.heavy)
+                            }
+                            .foregroundColor(.white)
+                        }
+                        .scaleEffect(buttonScale)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(phase == .idle && false)
+
+                } else {
+
+                    // Game Over
+
+                    VStack(spacing: 15) {
+
+                        Image(systemName: "trophy.fill")
+                            .font(.system(size: 55))
+                            .foregroundColor(.yellow)
+
+                        Text("GAME OVER!")
+                            .font(.largeTitle)
+                            .fontWeight(.heavy)
+                            .foregroundColor(.white)
+
+                        Text("YOUR SCORE: \(score)")
+                            .font(.title2)
+                            .foregroundColor(.green)
+
+                        Text("BEST SCORE: \(highScore)")
+                            .font(.headline)
+                            .foregroundColor(.yellow)
+
+                        Button {
+
+                            resetGame()
+
+                        } label: {
+
+                            Label(
+                                "PLAY AGAIN",
+                                systemImage: "arrow.clockwise"
+                            )
+                            .font(.headline)
+                            .foregroundColor(.black)
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(Color.green)
+                            .cornerRadius(15)
+                        }
+                    }
+                    .padding()
+                    .background(Color.white.opacity(0.07))
+                    .cornerRadius(20)
+                }
+
+                Spacer()
+
+                // High Score
+
+                VStack(spacing: 5) {
+
+                    Image(systemName: "crown.fill")
+                        .foregroundColor(.yellow)
+
+                    Text("PERSONAL BEST")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+
+                    Text("\(highScore)")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.yellow)
+                }
+
+                Spacer()
             }
-
-            // High score
-            VStack(spacing: 5) {
-                Text("BEST SCORE")
-                    .font(.caption)
-                    .foregroundColor(.gray)
-
-                Text("\(highScore)")
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .foregroundColor(.green)
-            }
-
-            Spacer()
+            .padding(25)
         }
-        .padding()
+        .onAppear {
+            prepareAudio()
+        }
         .onReceive(timer) { _ in
             updateTimer()
         }
+        .animation(.easeInOut, value: timeRemaining)
+        .animation(.spring(), value: score)
     }
 
-    // Handle button taps
+    // Prepare Sound
+
+    func prepareAudio() {
+
+        tapPlayer = loadSound(
+            name: "tap"
+        )
+
+        startPlayer = loadSound(
+            name: "start"
+        )
+
+        gameOverPlayer = loadSound(
+            name: "gameover"
+        )
+    }
+
+    func loadSound(name: String) -> AVAudioPlayer? {
+
+        guard let url = Bundle.main.url(
+            forResource: name,
+            withExtension: "wav"
+        ) else {
+
+            print("Sound file not found: \(name).wav")
+            return nil
+        }
+
+        do {
+
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.prepareToPlay()
+            return player
+
+        } catch {
+
+            print("Audio error: \(error)")
+            return nil
+        }
+    }
+
+    // Play Sound
+
+    func playSound(_ player: AVAudioPlayer?) {
+
+        guard soundEnabled else {
+            return
+        }
+
+        player?.currentTime = 0
+        player?.play()
+    }
+
+    // Handle Taps
+
     func tapButton() {
 
         if phase == .idle {
-            phase = .playing
+
+            startGame()
+            return
         }
 
-        if phase == .playing {
-            score += 1
+        guard phase == .playing else {
+            return
+        }
+
+        score += 1
+
+        playSound(tapPlayer)
+
+        if score > highScore {
+            highScore = score
+        }
+
+        // Button animation
+        withAnimation(.spring(
+            response: 0.2,
+            dampingFraction: 0.4
+        )) {
+
+            buttonScale = 0.92
+        }
+
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + 0.12
+        ) {
+
+            withAnimation {
+                buttonScale = 1.0
+            }
         }
     }
 
-    // Countdown timer
+    // Start Game
+
+    func startGame() {
+
+        score = 0
+        timeRemaining = 10
+        phase = .playing
+
+        playSound(startPlayer)
+    }
+
+    // Update Timer
+
     func updateTimer() {
 
         guard phase == .playing else {
@@ -140,28 +389,36 @@ struct ContentView: View {
         }
 
         if timeRemaining > 1 {
+
             timeRemaining -= 1
+
         } else {
+
             timeRemaining = 0
             phase = .over
 
-            // Update high score
             if score > highScore {
                 highScore = score
             }
+
+            playSound(gameOverPlayer)
         }
     }
 
-    // Restart game
+    // Restart Game
+
     func resetGame() {
 
         score = 0
         timeRemaining = 10
+        buttonScale = 1.0
         phase = .idle
     }
 }
 
 #Preview {
-    ContentView()
+    NavigationStack {
+        ContentView()
+    }
 }
 
